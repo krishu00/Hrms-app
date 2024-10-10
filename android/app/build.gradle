@@ -74,8 +74,10 @@ def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+    // buildToolsVersion rootProject.ext.buildToolsVersion
+  compileSdkVersion 34
+    buildToolsVersion "34.0.0"
+    // If you're using an older version, ensure it's compatible with your Gradle Plugin version
 
     namespace "com.newhrms"
     defaultConfig {
