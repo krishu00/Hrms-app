@@ -7,7 +7,8 @@ import { ActivityIndicator, View } from 'react-native'; // Import ActivityIndica
 
 const App = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true); // Loading state for initial auth check
+    const [loginLoading, setLoginLoading] = useState(false); // Loading state for login process
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -24,11 +25,18 @@ const App = () => {
     }, []);
 
     const handleLoginSuccess = async (token) => {
+        setLoginLoading(true); // Start login loader
+
+        // Adding a 2-second delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         try {
             await AsyncStorage.setItem('userToken', token);
             setIsAuthenticated(true);
         } catch (error) {
             console.error('Error saving token:', error);
+        } finally {
+            setLoginLoading(false); // Stop login loader
         }
     };
 
@@ -47,6 +55,15 @@ const App = () => {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <ActivityIndicator size="large" color="#0000ff" />
+            </View>
+        );
+    }
+
+    if (loginLoading) {
+        // Show loading spinner during the login process
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#00503D" />
             </View>
         );
     }
