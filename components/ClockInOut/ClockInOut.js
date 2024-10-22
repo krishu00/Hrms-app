@@ -8,133 +8,334 @@ import {
   Dimensions,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import dayjs from 'dayjs';
 import Geolocation from 'react-native-geolocation-service';
-import CookieManager from '@react-native-cookies/cookies';
-import axios from 'axios'; // For API requests
-   
-const { width } = Dimensions.get('screen');
-const SIZE = width * 0.7;
-const TICK_INTERVAL = 1000;    
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/FontAwesome';
 
-export default class ClockInOut extends React.Component {
-  state = {
-    currentTime: dayjs(),
-    secondDegree: new Animated.Value(0),   
-    minuteDegree: new Animated.Value(0),
-    hourDegree: new Animated.Value(0),
-    isPunchedIn: false,
-    latitude: null,
-    longitude: null,
-  };
+const {width} = Dimensions.get('screen');
+const SIZE = width * 0.7;
+const TICK_INTERVAL = 1000;
+
+export default class ClockInOut extends React.Component {   
+  constructor(props) {
+    super(props);
+    this.state = {
+      currentTime: dayjs(),
+      elapsedSeconds: 0,
+      secondDegree: new Animated.Value(0),
+      minuteDegree: new Animated.Value(0),
+      hourDegree: new Animated.Value(0),
+      isPunchedIn: false,
+      latitude: null,
+      longitude: null,
+      punchInTime: null,
+      punchOutTime: null,
+      loading: false,
+      isDoneForDay: false,
+      buttonLabel: 'Punch In',
+    };
+    this._ticker = null;
+  }
 
   componentDidMount() {
     this._ticker = setInterval(this.updateClock, TICK_INTERVAL);
-    this.updateClockHands();
+    this.checkPunchStatus(dayjs().format('YYYY-MM-DD'));
   }
 
   componentWillUnmount() {
     clearInterval(this._ticker);
-    this._ticker = null;
   }
 
   updateClock = () => {
-    const current = dayjs();
-    this.setState({ currentTime: current }, this.updateClockHands);
-  };
+    const {isPunchedIn, punchOutTime} = this.state;
 
-  updateClockHands = () => {
-    const { currentTime } = this.state;
-    const seconds = currentTime.second();
-    const minutes = currentTime.minute();
-    const hours = currentTime.hour() % 12; // Convert 24-hour to 12-hour format
+    // Update the current time
+    this.setState({currentTime: dayjs()}, this.updateClockHands);
 
-    const secondDegree = (seconds / 60) * 360;
-    const minuteDegree = (minutes / 60) * 360 + (seconds / 60) * 6;
-    const hourDegree = (hours / 12) * 360 + (minutes / 60) * 30;
+    // Only increment elapsedSeconds if punched in and not done for the day
+    if (isPunchedIn && !this.state.isDoneForDay) {
+      this.setState(prevState => ({
+        elapsedSeconds: prevState.elapsedSeconds + 1,
+      }));
 
-    this.state.secondDegree.setValue(secondDegree);
-    this.state.minuteDegree.setValue(minuteDegree);
-    this.state.hourDegree.setValue(hourDegree);
-  };
+      // Check if the current time has reached or exceeded punchOutTime
+      if (punchOutTime) {
+        const currentTime = dayjs();
+        const punchOutMoment = dayjs(punchOutTime, 'hh:mm A'); // Ensure format is correct
 
-  requestLocationPermission = async () => {
-    // Assuming permission is granted for this example
-    // Implement actual permission request logic as needed
-    return true; 
-  };
-
-  getLocationAndPunchIn = async () => {
-    const permissionGranted = await this.requestLocationPermission();
-    if (!permissionGranted) return;
-  
-    Geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        this.setState({ latitude, longitude });
-        console.log('Location obtained:', { latitude, longitude });
-        await this.punchIn(latitude, longitude); // Ensure punchIn is awaited
-      },
-      (error) => {
-        console.error('Error getting location:', error);
-        Alert.alert('Error', 'Unable to get your location');
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
-  };
-
-  punchIn = async (latitude, longitude) => {
-    try {
-      // Fetch cookies
-      const cookies = await CookieManager.getAll();
-      console.log('Retrieved cookies:', cookies);
-
-      // Check for the specific cookies
-      const employeeId = cookies.employee_id ? cookies.employee_id.value : null;
-      const companyCode = cookies.companyCode ? cookies.companyCode.value : null;
-
-      if (!employeeId || !companyCode) {
-        Alert.alert('Error', 'Unable to retrieve cookies');
-        return;
+        // Stop the stopwatch if the current time is past the punchOutTime
+        if (currentTime.isAfter(punchOutMoment)) {
+          this.setState({
+            isPunchedIn: false,
+            isDoneForDay: true,
+            elapsedSeconds: 0,
+          });
+          clearInterval(this._ticker); // Stop the clock
+        }
       }
-
-      const data = {
-        latitude,
-        longitude,
-      };
-
-      const headers = {
-        'Content-Type': 'application/json',
-        'Cookie': `employee_id=${employeeId}; companyCode=${companyCode}`, // Corrected cookie string
-      };
-
-      // API call
-      const response = await axios.post(
-        'http://hrmsapi.mhsindia.com/attendance/punch_in',
-        data,
-        { headers }
-      );
-
-      if (response.status === 200) {
-        console.log('Punch-in successful:', response.data);
-        this.togglePunch();
-      } else {
-        console.log('Punch-in failed:', response.data);
-        Alert.alert('Error', 'Punch-in failed');
-      }
-    } catch (error) {
-      console.error('API call error:', error);
-      Alert.alert('Error', 'Unable to punch in');
     }
   };
 
-  togglePunch = () => {
-    this.setState((prevState) => ({ isPunchedIn: !prevState.isPunchedIn }));
+  updateClockHands = () => {
+    const {currentTime} = this.state;
+    const seconds = currentTime.second();
+    const minutes = currentTime.minute();
+    const hours = currentTime.hour() % 12;
+
+    this.state.secondDegree.setValue((seconds / 60) * 360);
+    this.state.minuteDegree.setValue((minutes / 60) * 360 + (seconds / 60) * 6);
+    this.state.hourDegree.setValue((hours / 12) * 360 + (minutes / 60) * 30);
+  };
+
+  requestLocationPermission = async () => true; // Assuming permission is granted
+
+  getLocationAndPunchInOrOut = async action => {
+    if (await this.requestLocationPermission()) {
+      Geolocation.getCurrentPosition(
+        async position => {
+          const {latitude, longitude} = position.coords;
+          this.setState({latitude, longitude});
+          action === 'punchIn'
+            ? this.punchIn(latitude, longitude)
+            : this.punchOut(latitude, longitude);
+        },
+        error => {
+          console.error('Error getting location:', error);
+          Alert.alert('Error', 'Unable to get your location');
+        },
+        {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
+      );
+    }
+  };
+
+  checkPunchStatus = async date => {
+    try {
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/attendance/daily_attendance?date=${date}`,
+      );
+      const {punch_in_time, punch_out_time} = response.data?.[0] || {};
+
+      if (punch_in_time) {
+        const punchInTime = dayjs(punch_in_time);
+
+        // Calculate the elapsed time between the punch-in time and now
+        const now = dayjs();
+        const elapsedSeconds = now.diff(punchInTime, 'second');
+
+        this.setState({
+          punchInTime: punchInTime.format('hh:mm A'),
+          isPunchedIn: true,
+          elapsedSeconds, // Continue the stopwatch from the elapsed time
+          buttonLabel: punch_out_time ? 'Done for the day' : 'Clock Out',
+          punchOutTime: punch_out_time
+            ? dayjs(punch_out_time).format('hh:mm A')
+            : null,
+          isDoneForDay: !!punch_out_time,
+        });
+      } else {
+        this.resetPunchState();
+      }
+    } catch (error) {
+      console.error('Error while checking punch-in status:', error);
+      this.resetPunchState();
+    }
+  };
+
+  resetPunchState = () => {
+    this.setState({
+      punchInTime: null,
+      punchOutTime: null,
+      isPunchedIn: false,
+      buttonLabel: 'Punch In',
+      isDoneForDay: false,
+    });
+  };
+  punchIn = async (latitude, longitude) => {
+    try {
+      this.setState({loading: true});
+      const employeeId = await AsyncStorage.getItem('employee_id');
+      const companyCode = await AsyncStorage.getItem('companyCode');
+      if (!employeeId || !companyCode) throw new Error('Missing credentials');
+
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/attendance/punch_in`,
+        {data: {latitude, longitude}},
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: `employee_id=${employeeId}; companyCode=${companyCode}`,
+          },
+        },
+      );
+
+      if (response.data.success) {
+        const punchInTime = dayjs(response.data.punchInTime || dayjs());
+
+        const now = dayjs();
+        const elapsedSeconds = now.diff(punchInTime, 'second');
+
+        this.setState({
+          punchInTime: punchInTime.format('hh:mm A'),
+          isPunchedIn: true,
+          elapsedSeconds, 
+        });
+        Alert.alert(
+          'Success',
+          response.data.message || 'Punched in successfully',
+        );
+      }
+    } catch (error) {
+      this.handlePunchError(error);
+    } finally {
+      this.setState({loading: false});
+    }
+  };
+
+  // punchOut = async (latitude, longitude) => {
+  //   try {
+  //     this.setState({loading: true});
+
+  //     if (!this.state.isPunchedIn)
+  //       throw new Error('You need to punch in first');
+
+  //     const employeeId = await AsyncStorage.getItem('employee_id');
+  //     const companyCode = await AsyncStorage.getItem('companyCode');
+
+  //     if (!employeeId || !companyCode) throw new Error('Missing credentials');
+
+  //     const response = await axios.put(
+  //       `${process.env.REACT_APP_API_URL}/attendance/punch_out`,
+  //       {data: {latitude, longitude}},
+  //       {
+  //         headers: {
+  //           'Content-Type': 'application/json',
+  //           Cookie: `employee_id=${employeeId}; companyCode=${companyCode}`,
+  //         },
+  //       },
+  //     );
+
+  //     // console.log('Punch-out response:', response.data);
+
+  //     const punchOutTimeRaw = response.data.punch_out_time;
+
+  //     const punchOutTime = dayjs(punchOutTimeRaw).isValid()
+  //       ? dayjs(punchOutTimeRaw)
+  //       : dayjs();
+
+  //     const punchInTimeRaw = response.data.punchInTime;
+  //     const punchInTime = dayjs(punchInTimeRaw || dayjs());
+  //     const elapsedSeconds = punchOutTime.diff(punchInTime, 'second');
+
+  //     const formattedPunchOutTime = punchOutTime.format('hh:mm A');
+
+  //     this.setState({
+  //       punchOutTime: formattedPunchOutTime,
+  //       isPunchedIn: false,
+  //       isDoneForDay: true,
+  //       elapsedSeconds: 0,
+  //     }); 
+
+  //     Alert.alert(
+  //       'Success',   
+  //       response.data.message || 'Punched out successfully',
+  //     );
+  //   } catch (error) {
+  //     console.error('Error during punch-out:', error);
+  //     this.handlePunchError(error);
+  //   } finally {
+  //     this.setState({loading: false});
+  //   }
+  // };
+
+  punchOut = async (latitude, longitude) => {
+    try {
+      this.setState({ loading: true });
+  
+      if (!this.state.isPunchedIn) throw new Error('You need to punch in first');
+  
+      const employeeId = await AsyncStorage.getItem('employee_id');
+      const companyCode = await AsyncStorage.getItem('companyCode');
+  
+      if (!employeeId || !companyCode) throw new Error('Missing credentials');
+  
+      const response = await axios.put(
+        `${process.env.REACT_APP_API_URL}/attendance/punch_out`,
+        { data: { latitude, longitude } },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: `employee_id=${employeeId}; companyCode=${companyCode}`,
+          },
+        },
+      );
+  
+      const punchOutTimeRaw = response.data.punch_out_time;
+      const punchOutTime = dayjs(punchOutTimeRaw).isValid() ? dayjs(punchOutTimeRaw) : dayjs();
+      const punchInTimeRaw = response.data.punchInTime;
+      const punchInTime = dayjs(punchInTimeRaw || dayjs());
+  
+      this.setState({
+        punchOutTime: punchOutTime.format('hh:mm A'),
+        isPunchedIn: false,
+        isDoneForDay: true,
+        elapsedSeconds: 0,
+      });  
+  
+      Alert.alert('Success', response.data.message || 'Punched out successfully');   
+    } catch (error) {
+      console.error('Error during punch-out:', error);
+      this.handlePunchError(error);
+    } finally {
+      this.setState({ loading: false });
+    }   
+  };
+  
+  handlePunchError = error => {
+    const errorMessage = error.response?.data?.message || 'Punch action failed';
+    Alert.alert('Error', errorMessage);
+    console.error(errorMessage);
+  };
+
+  // renderStopwatch = () => {
+  //   const {elapsedSeconds} = this.state;
+  //   const hours = Math.floor(elapsedSeconds / 3600);
+  //   const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  //   const seconds = elapsedSeconds % 60;
+  //   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(
+  //     2,
+  //     '0',
+  //   )}:${String(seconds).padStart(2, '0')}`;
+  // };
+
+  renderStopwatch = () => {
+    const {elapsedSeconds} = this.state;
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    const seconds = elapsedSeconds % 60;
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(
+      2,
+      '0',
+    )}:${String(seconds).padStart(2, '0')}`;
   };
 
   render() {
-    const { currentTime, secondDegree, minuteDegree, hourDegree, isPunchedIn } = this.state;
+    const {
+      loading,
+      currentTime,
+      secondDegree,
+      minuteDegree,
+      hourDegree,
+      punchInTime,
+      punchOutTime,
+      buttonLabel,
+      isPunchedIn,
+      isDoneForDay,
+    } = this.state;
 
     const transformSeconds = {
       transform: [
@@ -146,7 +347,6 @@ export default class ClockInOut extends React.Component {
         },
       ],
     };
-
     const transformMinutes = {
       transform: [
         {
@@ -157,7 +357,6 @@ export default class ClockInOut extends React.Component {
         },
       ],
     };
-
     const transformHours = {
       transform: [
         {
@@ -172,7 +371,6 @@ export default class ClockInOut extends React.Component {
     return (
       <View style={styles.container}>
         <StatusBar hidden={true} />
-
         <View style={styles.clockContainer}>
           <View style={[styles.bigQuadran]} />
           <View style={[styles.mediumQuadran]} />
@@ -189,25 +387,95 @@ export default class ClockInOut extends React.Component {
         </View>
 
         <View style={styles.infoContainer}>
-          <Text style={styles.currentTime}>
-            {currentTime.format('hh:mm:ss A')}
-          </Text>
+          {loading ? (
+            <ActivityIndicator size="large" color="#a8d7c5" />
+          ) : (
+            <>
+              <Text style={styles.currentTime}>
+                {isPunchedIn ? this.renderStopwatch() : '00:00:00'}
+              </Text>
 
-          <View style={styles.punchSection}>
-            <Text style={styles.punchInOut}>
-              In Time: <Text style={styles.darkerTimeText}>09:00</Text>
-            </Text>
-            <Text style={styles.punchInOut}>
-              Out Time: <Text style={styles.darkerTimeText}>06:00</Text>
-            </Text>
-          </View>
+              <View style={styles.punchSection}>
+                <Text style={styles.punchIn}>
+                  In Time:{' '}
+                  <Text style={styles.darkerTimeText}>
+                    {punchInTime || '00:00'}
+                  </Text>
+                </Text>
+                <Text style={styles.punchOut}>
+                  Out Time:{' '}
+                  <Text style={styles.darkerTimeText}>
+                    {punchOutTime || '00:00'}
+                  </Text>
+                </Text>
+              </View>
+
+              {/* <TouchableOpacity
+                style={styles.punchButton}
+                onPress={() =>
+                  this.getLocationAndPunchInOrOut(
+                    isPunchedIn ? 'punchOut' : 'punchIn',
+                  )
+                }>
+                <Icon
+                  name={isPunchedIn ? 'sign-out' : 'sign-in'}
+                  size={20}
+                  color={isPunchedIn ? '#F7454A' : '#fff'}
+                  style={styles.iconStyle}
+                />
+                <Text
+                  style={[
+                    styles.buttonText,
+                    isPunchedIn ? styles.punchInText : styles.punchOutText,
+                  ]}>
+                  {isPunchedIn ? 'Punch Out' : 'Punch In'}
+                </Text>
+              </TouchableOpacity> */}
+              <TouchableOpacity
+                style={styles.punchButton}
+                onPress={() => {
+                  if (!isPunchedIn && !isDoneForDay) {
+                    this.getLocationAndPunchInOrOut('punchIn'); // Clock In
+                  } else if (isPunchedIn && !isDoneForDay) {
+                    this.getLocationAndPunchInOrOut('punchOut'); // Clock Out
+                  } else if (isPunchedIn && isDoneForDay) {
+                    // Handle the case when the user is done for the day
+                    Alert.alert("You've already marked as done for the day.");
+                  }
+                }}>
+                <Icon
+                  name={
+                    isDoneForDay
+                      ? 'check-circle'
+                      : isPunchedIn
+                      ? 'sign-out'
+                      : 'sign-in'
+                  }
+                  size={20}
+                  color={
+                    isDoneForDay ? '#4CAF50' : isPunchedIn ? '#F7454A' : '#fff'
+                  }
+                  style={styles.iconStyle}
+                />
+                <Text
+                  style={[
+                    styles.buttonText,
+                    isDoneForDay
+                      ? styles.doneText
+                      : isPunchedIn
+                      ? styles.punchInText
+                      : styles.punchOutText,
+                  ]}>
+                  {isDoneForDay
+                    ? 'Done for the Day'
+                    : isPunchedIn
+                    ? 'Clock Out'
+                    : 'Clock In'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
-
-        <TouchableOpacity style={styles.punchButton} onPress={this.getLocationAndPunchIn}>
-          <Text style={styles.buttonText}>
-            {isPunchedIn ? 'Punch Out' : 'Punch In'}
-          </Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -264,9 +532,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   mediumQuadran: {
-    width: SIZE * 0.5,
-    height: SIZE * 0.5,
-    borderRadius: SIZE * 0.25,
+    width: SIZE * 0.6,
+    height: SIZE * 0.6,
+    borderRadius: SIZE * 0.3,
     backgroundColor: '#E3F0E3',
     position: 'absolute',
   },
@@ -278,7 +546,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   infoContainer: {
-    padding: 15,
+    paddingTop: 15,
     borderRadius: 10,
     alignItems: 'center',
     width: '100%',
@@ -294,16 +562,26 @@ const styles = StyleSheet.create({
     width: '100%',
     padding: 10,
   },
-  punchInOut: {
+  punchIn: {
     fontSize: 18,
-    color: '#333',
+
+    color: '#6a9689',
+    fontWeight: '700',
+  },
+  punchOut: {
+    fontSize: 18,
+    color: '#6a9689',
+    fontWeight: '700',
   },
   darkerTimeText: {
-    color: '#111',
+    color: '#00503D',
     fontWeight: 'bold',
   },
   punchButton: {
-    backgroundColor: '#60a5fa',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#a8d7c5',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -311,7 +589,16 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 18,   
     fontWeight: 'bold',
+  },
+  iconStyle: {
+    marginRight: 10,
+  },
+  punchInText: {
+    color: '#F7454A',
+  },
+  punchOutText: {
+    color: '#fff',
   },
 });
