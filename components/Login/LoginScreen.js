@@ -10,73 +10,18 @@ const LoginScreen = ({ onLoginSuccess }) => {
     const [password, setPassword] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
 
-   
-
-    // const handleLogin = async () => {
-    //     setErrorMessage('');
-    //     try {
-    //         const response = await axios.post('http://hrmsapi.mhsindia.com/login', {
-    //             email,
-    //             password,
-    //         }, {
-    //             withCredentials: true,
-    //         });
-    
-    //         if (response.data.success) {
-    //             const employee = response.data.employee;
-    //             if (employee) {
-    //                 const employeeId = employee.employee_id;
-    //                 const companyCode = employee.company_code; // Corrected this line
-    
-    //                 // Store values in AsyncStorage
-    //                 await AsyncStorage.setItem('employee_id', employeeId);
-    //                 await AsyncStorage.setItem('companyCode', companyCode); 
-    //                 await AsyncStorage.setItem('userToken', employeeId);
-                    
-    //                 onLoginSuccess(employeeId);
-    //             } else {
-    //                 setErrorMessage('Token or employee data missing in response.');
-    //             }
-    //         } else {
-    //             setErrorMessage(response.data.message || 'Invalid credentials. Please try again.');
-    //         }
-    //     } catch (error) {
-    //         console.error('Sign-in error:', error);
-    //         console.log('Error response:', error.response); // Log full error response
-    //         setErrorMessage(error.response?.data?.message || 'An error occurred during sign-in. Please try again.');
-    //     }
-    // };
-
-    // const checkStoredData = async () => {
-    //     try {
-    //         const employeeId = await AsyncStorage.getItem('employee_id');
-    //         const companyCode = await AsyncStorage.getItem('companyCode');
-            
-    //         if (employeeId !== null) {
-    //             console.log('Employee ID:', employeeId);
-    //         } else {
-    //             console.log('Employee ID is not set.');
-    //         }
-    
-    //         if (companyCode !== null) {
-    //             console.log('Company Code:', companyCode);
-    //         } else {
-    //             console.log('Company Code is not set.');
-    //         }
-    //     } catch (error) {
-    //         console.error('Error retrieving data from AsyncStorage:', error);
-    //     }
-    // };
-    
-    // // Call the function where appropriate, e.g., after login or in a useEffect.
-    // checkStoredData();
-    
-
-    const handleLogin = async () => {
+       const handleLogin = async () => {
         setErrorMessage('');
         try {
-            const response = await axios.post('http://hrmsapi.mhsindia.com/login', {
+            // const response = await axios.post('http://hrmsapi.mhsindia.com/login', {
+                // const response = await axios.post('http://192.168.17.59:8080/login', {
+                    const response = await axios.post(
+                                  `${process.env.REACT_APP_API_URL}/login`,
+
+                         {
+   
                 email,
+
                 password,
             }, {
                 withCredentials: true,

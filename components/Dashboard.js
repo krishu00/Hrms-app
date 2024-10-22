@@ -14,28 +14,32 @@ const Tab = createBottomTabNavigator();
 const Dashboard = ({ onLogoutSuccess }) => {
   return (
     <View style={styles.container}>
-      {/* Header is displayed at the top, passing the logout handler */}
       <Header onLogoutSuccess={onLogoutSuccess} />
       
-      {/* Bottom Tab Navigator */}
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          headerShown: false, // Hide default header provided by react-navigation
-          tabBarIcon: ({ focused, color }) => {
+          headerShown: false,
+          tabBarIcon: ({ focused }) => {
             let iconName;
 
-            if (route.name === 'Home') {
-              iconName = 'home';
-            } else if (route.name === 'Feeds') {
-              iconName = 'inbox';
-            } else if (route.name === 'Request') {
-              iconName = 'envelope';
-            } else if (route.name === 'More') {
-              iconName = 'list';
+            switch (route.name) {
+              case 'Home':
+                iconName = 'home';
+                break;
+              case 'Feeds':
+                iconName = 'inbox';
+                break;
+              case 'Request':
+                iconName = 'envelope';
+                break;
+              case 'More':
+                iconName = 'list';
+                break;
+              default:
+                iconName = 'home'; 
             }
 
-            // Set color based on active or inactive tab
-            color = focused ? '#6a9689' : 'darkgray';
+            const color = focused ? '#6a9689' : 'darkgray';
             return <Icon name={iconName} color={color} size={30} />;
           },
           tabBarActiveTintColor: '#6a9689',
