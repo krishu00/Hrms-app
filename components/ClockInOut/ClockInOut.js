@@ -15,12 +15,15 @@ import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import {apiMiddleware} from '../../src/apiMiddleware/apiMiddleware';
+import {MMKV} from 'react-native-mmkv';
 
+const storage = new MMKV();
 const {width} = Dimensions.get('screen');
 const SIZE = width * 0.7;
 const TICK_INTERVAL = 1000;
 
-export default class ClockInOut extends React.Component {   
+export default class ClockInOut extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -53,28 +56,24 @@ export default class ClockInOut extends React.Component {
   updateClock = () => {
     const {isPunchedIn, punchOutTime} = this.state;
 
-    // Update the current time
     this.setState({currentTime: dayjs()}, this.updateClockHands);
 
-    // Only increment elapsedSeconds if punched in and not done for the day
     if (isPunchedIn && !this.state.isDoneForDay) {
       this.setState(prevState => ({
         elapsedSeconds: prevState.elapsedSeconds + 1,
       }));
 
-      // Check if the current time has reached or exceeded punchOutTime
       if (punchOutTime) {
         const currentTime = dayjs();
-        const punchOutMoment = dayjs(punchOutTime, 'hh:mm A'); // Ensure format is correct
+        const punchOutMoment = dayjs(punchOutTime, 'hh:mm A');
 
-        // Stop the stopwatch if the current time is past the punchOutTime
         if (currentTime.isAfter(punchOutMoment)) {
           this.setState({
             isPunchedIn: false,
             isDoneForDay: true,
             elapsedSeconds: 0,
           });
-          clearInterval(this._ticker); // Stop the clock
+          clearInterval(this._ticker);
         }
       }
     }
@@ -91,9 +90,9 @@ export default class ClockInOut extends React.Component {
     this.state.hourDegree.setValue((hours / 12) * 360 + (minutes / 60) * 30);
   };
 
-  requestLocationPermission = async () => true; // Assuming permission is granted
+  requestLocationPermission = async () => true;
 
-  getLocationAndPunchInOrOut = async action => {
+  getLocationAndPunchInOrOut = async action => {   
     if (await this.requestLocationPermission()) {
       Geolocation.getCurrentPosition(
         async position => {
@@ -102,7 +101,7 @@ export default class ClockInOut extends React.Component {
           action === 'punchIn'
             ? this.punchIn(latitude, longitude)
             : this.punchOut(latitude, longitude);
-        },
+        }, 
         error => {
           console.error('Error getting location:', error);
           Alert.alert('Error', 'Unable to get your location');
@@ -112,24 +111,63 @@ export default class ClockInOut extends React.Component {
     }
   };
 
+  // checkPunchStatus = async date => {
+  //   try {
+  //     // const response = await axios.get(
+  //     //   `${process.env.REACT_APP_API_URL}/attendance/daily_attendance?date=${date}`,
+  //     // );
+  //     const response = await apiMiddleware.post(
+  //       '/attendance/daily_attendance?date=${date}',
+
+  //     );
+  //     console.log('check status ' , response);
+
+  //     const {punch_in_time, punch_out_time} = response.data?.[0] || {};
+
+  //     if (punch_in_time) {
+  //       const punchInTime = dayjs(punch_in_time);
+
+  //       const now = dayjs();
+  //       const elapsedSeconds = now.diff(punchInTime, 'second');
+
+  //       this.setState({
+  //         punchInTime: punchInTime.format('hh:mm A'),
+  //         isPunchedIn: true,
+  //         elapsedSeconds,
+  //         buttonLabel: punch_out_time ? 'Done for the day' : 'Clock Out',
+  //         punchOutTime: punch_out_time
+  //           ? dayjs(punch_out_time).format('hh:mm A')
+  //           : null,
+  //         isDoneForDay: !!punch_out_time,
+  //       });
+  //     } else {
+  //       this.resetPunchState();
+  //     }
+  //   } catch (error) {
+  //     console.error('Error while checking punch-in status:', error);
+  //     this.resetPunchState();
+  //   }
+  // };
+
   checkPunchStatus = async date => {
     try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/attendance/daily_attendance?date=${date}`,
+      const response = await apiMiddleware.get(
+        `/attendance/daily_attendance?date=${date}`,
       );
+
+      // console.log('check status ', response);
+
       const {punch_in_time, punch_out_time} = response.data?.[0] || {};
 
       if (punch_in_time) {
         const punchInTime = dayjs(punch_in_time);
-
-        // Calculate the elapsed time between the punch-in time and now
         const now = dayjs();
         const elapsedSeconds = now.diff(punchInTime, 'second');
 
         this.setState({
           punchInTime: punchInTime.format('hh:mm A'),
           isPunchedIn: true,
-          elapsedSeconds, // Continue the stopwatch from the elapsed time
+          elapsedSeconds,
           buttonLabel: punch_out_time ? 'Done for the day' : 'Clock Out',
           punchOutTime: punch_out_time
             ? dayjs(punch_out_time).format('hh:mm A')
@@ -154,15 +192,19 @@ export default class ClockInOut extends React.Component {
       isDoneForDay: false,
     });
   };
+
   punchIn = async (latitude, longitude) => {
     try {
-      this.setState({loading: true});
-      const employeeId = await AsyncStorage.getItem('employee_id');
-      const companyCode = await AsyncStorage.getItem('companyCode');
+      this.setState({loading: true});   
+
+      const employeeId = storage.getString('employee_id');
+      const companyCode = storage.getString('companyCode');
+
       if (!employeeId || !companyCode) throw new Error('Missing credentials');
 
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/attendance/punch_in`,
+      // Use `apiMiddleware.post` to make the API call
+      const response = await apiMiddleware.post(
+        '/attendance/punch_in',
         {data: {latitude, longitude}},
         {
           headers: {
@@ -171,18 +213,19 @@ export default class ClockInOut extends React.Component {
           },
         },
       );
+// console.log('punchin', response);
 
-      if (response.data.success) {
+      if (response?.data?.success) {
         const punchInTime = dayjs(response.data.punchInTime || dayjs());
-
         const now = dayjs();
         const elapsedSeconds = now.diff(punchInTime, 'second');
 
         this.setState({
           punchInTime: punchInTime.format('hh:mm A'),
           isPunchedIn: true,
-          elapsedSeconds, 
+          elapsedSeconds,
         });
+
         Alert.alert(
           'Success',
           response.data.message || 'Punched in successfully',
@@ -195,76 +238,22 @@ export default class ClockInOut extends React.Component {
     }
   };
 
-  // punchOut = async (latitude, longitude) => {
-  //   try {
-  //     this.setState({loading: true});
-
-  //     if (!this.state.isPunchedIn)
-  //       throw new Error('You need to punch in first');
-
-  //     const employeeId = await AsyncStorage.getItem('employee_id');
-  //     const companyCode = await AsyncStorage.getItem('companyCode');
-
-  //     if (!employeeId || !companyCode) throw new Error('Missing credentials');
-
-  //     const response = await axios.put(
-  //       `${process.env.REACT_APP_API_URL}/attendance/punch_out`,
-  //       {data: {latitude, longitude}},
-  //       {
-  //         headers: {
-  //           'Content-Type': 'application/json',
-  //           Cookie: `employee_id=${employeeId}; companyCode=${companyCode}`,
-  //         },
-  //       },
-  //     );
-
-  //     // console.log('Punch-out response:', response.data);
-
-  //     const punchOutTimeRaw = response.data.punch_out_time;
-
-  //     const punchOutTime = dayjs(punchOutTimeRaw).isValid()
-  //       ? dayjs(punchOutTimeRaw)
-  //       : dayjs();
-
-  //     const punchInTimeRaw = response.data.punchInTime;
-  //     const punchInTime = dayjs(punchInTimeRaw || dayjs());
-  //     const elapsedSeconds = punchOutTime.diff(punchInTime, 'second');
-
-  //     const formattedPunchOutTime = punchOutTime.format('hh:mm A');
-
-  //     this.setState({
-  //       punchOutTime: formattedPunchOutTime,
-  //       isPunchedIn: false,
-  //       isDoneForDay: true,
-  //       elapsedSeconds: 0,
-  //     }); 
-
-  //     Alert.alert(
-  //       'Success',   
-  //       response.data.message || 'Punched out successfully',
-  //     );
-  //   } catch (error) {
-  //     console.error('Error during punch-out:', error);
-  //     this.handlePunchError(error);
-  //   } finally {
-  //     this.setState({loading: false});
-  //   }
-  // };
-
   punchOut = async (latitude, longitude) => {
     try {
-      this.setState({ loading: true });
-  
-      if (!this.state.isPunchedIn) throw new Error('You need to punch in first');
-  
-      const employeeId = await AsyncStorage.getItem('employee_id');
-      const companyCode = await AsyncStorage.getItem('companyCode');
-  
+      this.setState({loading: true});
+
+      if (!this.state.isPunchedIn)
+        throw new Error('You need to punch in first');
+
+      const employeeId = storage.getString('employee_id');
+      const companyCode = storage.getString('companyCode');
+
       if (!employeeId || !companyCode) throw new Error('Missing credentials');
-  
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/attendance/punch_out`,
-        { data: { latitude, longitude } },
+
+      // Use `apiMiddleware.put` instead of `axios.put`
+      const response = await apiMiddleware.put(
+        '/attendance/punch_out',
+        {data: {latitude, longitude}},
         {
           headers: {
             'Content-Type': 'application/json',
@@ -272,44 +261,38 @@ export default class ClockInOut extends React.Component {
           },
         },
       );
-  
+
       const punchOutTimeRaw = response.data.punch_out_time;
-      const punchOutTime = dayjs(punchOutTimeRaw).isValid() ? dayjs(punchOutTimeRaw) : dayjs();
+      const punchOutTime = dayjs(punchOutTimeRaw).isValid()
+        ? dayjs(punchOutTimeRaw)
+        : dayjs();
       const punchInTimeRaw = response.data.punchInTime;
       const punchInTime = dayjs(punchInTimeRaw || dayjs());
-  
+
       this.setState({
         punchOutTime: punchOutTime.format('hh:mm A'),
         isPunchedIn: false,
         isDoneForDay: true,
         elapsedSeconds: 0,
-      });  
-  
-      Alert.alert('Success', response.data.message || 'Punched out successfully');   
+      });
+
+      Alert.alert(
+        'Success',
+        response.data.message || 'Punched out successfully',
+      );
     } catch (error) {
       console.error('Error during punch-out:', error);
       this.handlePunchError(error);
     } finally {
-      this.setState({ loading: false });
-    }   
+      this.setState({loading: false});
+    }
   };
-  
+
   handlePunchError = error => {
     const errorMessage = error.response?.data?.message || 'Punch action failed';
     Alert.alert('Error', errorMessage);
     console.error(errorMessage);
   };
-
-  // renderStopwatch = () => {
-  //   const {elapsedSeconds} = this.state;
-  //   const hours = Math.floor(elapsedSeconds / 3600);
-  //   const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-  //   const seconds = elapsedSeconds % 60;
-  //   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(
-  //     2,
-  //     '0',
-  //   )}:${String(seconds).padStart(2, '0')}`;
-  // };
 
   renderStopwatch = () => {
     const {elapsedSeconds} = this.state;
@@ -435,11 +418,10 @@ export default class ClockInOut extends React.Component {
                 style={styles.punchButton}
                 onPress={() => {
                   if (!isPunchedIn && !isDoneForDay) {
-                    this.getLocationAndPunchInOrOut('punchIn'); // Clock In
+                    this.getLocationAndPunchInOrOut('punchIn');
                   } else if (isPunchedIn && !isDoneForDay) {
-                    this.getLocationAndPunchInOrOut('punchOut'); // Clock Out
+                    this.getLocationAndPunchInOrOut('punchOut');
                   } else if (isPunchedIn && isDoneForDay) {
-                    // Handle the case when the user is done for the day
                     Alert.alert("You've already marked as done for the day.");
                   }
                 }}>
@@ -589,7 +571,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,   
+    fontSize: 18,
     fontWeight: 'bold',
   },
   iconStyle: {
