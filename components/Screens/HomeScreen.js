@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, ScrollView } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import ClockInOut from '../ClockInOut/ClockInOut'; // Assuming this is where your ClockInOut component resides
 import TimerCalender from '../TimerCalendar/TimerCalender';
+import DisplayTotalLeaves from '../DisplayTotalLeaves/DisplayTotalLeaves';
 
 const HomeScreen = () => {
   const [currentTime, setCurrentTime] = useState('');
@@ -23,7 +24,7 @@ const HomeScreen = () => {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container}>   
       {/* Scrollable View */}
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Overview Section */}
@@ -41,16 +42,17 @@ const HomeScreen = () => {
 
             {/* Leaves Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Leaves</Text>
+              <DisplayTotalLeaves/>
+              {/* <Text style={styles.sectionTitle}>Leaves</Text>
               <Text style={styles.sectionValue}>3.75</Text>
-              <Text style={styles.sectionDetails}>Leaves Taken: 0</Text>
+              <Text style={styles.sectionDetails}>Leaves Taken: 0</Text>  */}
             </View>
           </View>
         </View>
         
 
         {/* ClockInOut Section */}
-        <View style={styles.sectionClockContainer}>
+        <View style={styles.sectionClockContainer}>  
           <Text style={styles.heading}>Clock In/Out</Text>
           <ClockInOut />
         </View>
@@ -108,12 +110,12 @@ const styles = StyleSheet.create({
   section: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    padding: 20,
-    width: '45%',
+    padding: 20,  
+    width: '48%',
     alignItems: 'center',
 
     borderWidth: 1,
-    borderColor: '#dcdcdc',
+    borderColor: '#dcdcdc',   
     borderRadius: 10,
     elevation: 4,
   },

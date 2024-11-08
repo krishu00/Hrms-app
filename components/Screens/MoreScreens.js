@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import React from 'react';
+import Icon from 'react-native-vector-icons/AntDesign';
+
 
 const MoreScreen = () => {
   return (
@@ -9,6 +11,9 @@ const MoreScreen = () => {
         Explore more options and settings here. Customize your experience, access additional features, and learn more about 
         how you can make the most of the app.
       </Text>
+
+<Icon name="delete" size={50}/>
+<Text> jnasjd</Text>
     </View>
   );
 };

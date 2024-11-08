@@ -5,26 +5,33 @@ import {
   TouchableOpacity,
   View,
   Image,
-  TouchableWithoutFeedback,
+  TouchableWithoutFeedback,   
   Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
-import axios from 'axios';
+import {MMKV} from 'react-native-mmkv';
+import {apiMiddleware} from '../../src/apiMiddleware/apiMiddleware';
+
+const storage = new MMKV();
 
 const Header = ({onLogoutSuccess}) => {
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [name, setName] = useState(''); 
-  const [employeeId, setEmployeeId] = useState(''); 
+  const [name, setName] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
 
   useEffect(() => {
-    // Fetch user details on component mount
-    UserDetails();
+    const controller = new AbortController();
+    UserDetails(controller);
+
+    return () => {
+      controller.abort(); // Clean up the fetch operation on unmount
+    };
   }, []);
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem('userToken');
+      // Remove user token from MMKV
+      storage.delete('userToken');
       setDropdownVisible(false); // Close dropdown after logging out
       onLogoutSuccess(); // Call the parent component function to update UI
     } catch (error) {
@@ -42,43 +49,43 @@ const Header = ({onLogoutSuccess}) => {
     }
   };
 
-  const UserDetails = async () => {
+  const UserDetails = async controller => {
     try {
-      const storedEmployeeId = await AsyncStorage.getItem('employee_id');
-      const storedCompanyCode = await AsyncStorage.getItem('companyCode');
+      const storedEmployeeId = storage.getString('employee_id');
+      const storedCompanyCode = storage.getString('companyCode');
 
       if (!storedEmployeeId || !storedCompanyCode) {
         Alert.alert('Error', 'Unable to retrieve stored data');
         return;
-      }   
+      }
 
       const headers = {
-        'Content-Type': 'application/json',
         Cookie: `employee_id=${storedEmployeeId}; companyCode=${storedCompanyCode}`,
       };
 
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/company/employee-details`,
-        {headers},
-      );
+      const response = await apiMiddleware.get('/company/employee-details', {
+        headers,
+        signal: controller.signal,
+      });
 
-      if (response.data) {
+      if (response?.data?.data) {
         const employeeDetails = response.data.data.employee_details;
         const employeeId = response.data.data.employee_id;
 
         // Update state with name and employee ID
         setName(employeeDetails.name);
         setEmployeeId(employeeId);
-
-        // Alert.alert(
-        //   'Success',
-        //   response.data.message || 'Punched in successfully',
-        // );
       } else {
-        Alert.alert('Error', response.data.message || 'Punch-in failed');
+        Alert.alert(
+          'Error',
+          response.message || 'Failed to fetch employee details',
+        );
       }
     } catch (error) {
-      Alert.alert('Error', 'Unable to find details');
+      if (error.name !== 'CanceledError') {
+        Alert.alert('Error', 'Unable to find details');
+        console.error('UserDetails error:', error);
+      }
     }
   };
 
@@ -91,7 +98,7 @@ const Header = ({onLogoutSuccess}) => {
           end={{x: 1, y: 0}}
           style={styles.headerContainer}>
           <Image
-            source={require('../../logos/daksh-logo.png')}
+            source={require('../../src/logos/daksh-logo.png')}
             style={styles.logo}
           />
 
@@ -144,7 +151,7 @@ const styles = StyleSheet.create({
   userId: {
     fontSize: 14,
     color: '#00503D',
-    fontWeight:'700'
+    fontWeight: '700',
   },
   dropdownContainer: {
     position: 'absolute',
@@ -161,7 +168,7 @@ const styles = StyleSheet.create({
   dropdownText: {
     color: '#81BAA5',
     fontWeight: '600',
-    width:50
+    width: 50,
   },
 });
 

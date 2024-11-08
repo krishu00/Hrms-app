@@ -1,83 +1,104 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, Modal, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, ActivityIndicator ,Linking  } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import axios from 'axios';
+import { isNotNull } from '../../src/utils/utils';
+import { apiMiddleware } from '../../src/apiMiddleware/apiMiddleware';
 
 const TimerCalender = () => {
   const [markedDates, setMarkedDates] = useState({});
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null); 
   const [isModalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [attendanceData, setAttendanceData] = useState(null);
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  const fetchWorkingHours = async (month, year) => {
+    const controller = new AbortController(); // Create a new controller instance
+    try {   
+      const response = await apiMiddleware.get(
+        `/attendance/daily_working_hours?month=${month}&year=${year}`,  
+        { signal: controller.signal } // Pass the controller signal
+      );
+      const { workingHoursPerDay } = response.data;
 
-const fetchWorkingHours = async () => {
-  try {
-    const response = await axios.get(`${process.env.REACT_APP_API_URL}/attendance/daily_working_hours?month=10&year=2024`);
-    const { workingHoursPerDay } = response.data;
-    // console.log('working data ', workingHoursPerDay);  
-
-    if (workingHoursPerDay && workingHoursPerDay.length > 0) {
-      const formattedData = workingHoursPerDay.reduce((acc, { date, decimal_hours }) => {
-        const formattedDate = `2024-10-${String(date).padStart(2, '0')}`;
-        const hours = Math.floor(decimal_hours); 
-        const minutes = Math.round((decimal_hours - hours) * 60); 
-        const timeString = `${hours}:${String(minutes).padStart(2, '0')}`; 
-        acc[formattedDate] = {
-          customStyles: {
-            container: styles.dayContainer,
-            text: { color: getTimeColor(timeString) }, 
-          },
-          time: timeString,
-        };
-        return acc;
-      }, {});
-
-      setMarkedDates(formattedData); 
-    } else {
-      console.log('No working hours data available for this month/year.');
+      if (isNotNull(workingHoursPerDay) && workingHoursPerDay.length > 0) {
+        const formattedData = workingHoursPerDay.reduce((acc, { date, decimal_hours }) => {
+          const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+          const hours = Math.floor(decimal_hours);
+          const minutes = Math.round((decimal_hours - hours) * 60);
+          const timeString = `${hours}:${String(minutes).padStart(2, '0')}`;
+          acc[formattedDate] = {
+            customStyles: {
+              container: styles.dayContainer,
+              text: { color: getTimeColor(timeString) },
+            },
+            time: timeString,
+          };
+          return acc;
+        }, {});
+        setMarkedDates(formattedData);
+      } else {
+        console.log('No working hours data available for this month/year.');
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Fetch aborted');
+      } else {
+        console.error('Error fetching working hours:', error);
+      }
     }
-  } catch (error) {
-    console.error('Error fetching working hours:', error);
-  }
-};
+    return () => controller.abort(); // Cleanup function to cancel the request if the component unmounts
+  };
 
   useEffect(() => {
-    fetchWorkingHours();
+    const currentMonth = new Date().getMonth() + 1;    
+    const currentYear = new Date().getFullYear();
+    fetchWorkingHours(currentMonth, currentYear);
   }, []);
 
   const getTimeColor = (time) => {
-    const [hours, minutes] = time.split(':').map(Number);
+    const [hours, minutes] = time.split(':').map(Number);        
     const totalMinutes = hours * 60 + minutes;
     return totalMinutes < 480 ? 'red' : 'green';
   };
 
   const fetchAttendanceData = async (date) => {
     setLoading(true);
+    const controller = new AbortController(); // Create a new controller instance
     try {
-      await delay(1500); 
+      await delay(1000);
+      const response = await apiMiddleware.get(
+        `/attendance/daily_attendance?date=${date}`,
+        { signal: controller.signal } // Pass the controller signal
+      );
 
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/attendance/daily_attendance?date=${date}`);
-      setAttendanceData(response.data[0]); 
-      console.log('response day vise' ,  response.data[0]);
-    } catch (error) {   
-      console.error('Error fetching attendance data:', error);
+      setAttendanceData(response.data[0]);
+      console.log('response day wise', response.data[0]);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Fetch aborted');
+      } else {
+        console.error('Error fetching attendance data:', error);
+      }
     } finally {
-      setLoading(false); 
+      setLoading(false);
     }
-  };
+    return () => controller.abort(); // Cleanup function to cancel the request if the component unmounts
+  };  
+
   const formatWorkingHours = (hours) => {
-    const totalMinutes = Math.round(hours * 60);
+    const totalMinutes = Math.round(hours * 60);    
     const hrs = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
-  
+
     return `${hrs} Hr ${mins} min`;
   };
+
   const onDayPress = (date) => {
     setSelectedDate(date.dateString);
-    setModalVisible(true);   
+    setModalVisible(true);
     fetchAttendanceData(date.dateString);
   };
 
@@ -88,13 +109,15 @@ const fetchWorkingHours = async () => {
   const formatTime = (dateTimeString) => {
     const date = new Date(dateTimeString);
     return date.toLocaleString(undefined, {
-      timeZone: "Asia/Kolkata",
+      timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
       hour12: true,
     });
   };
+
+
 
   return (
     <View style={styles.container}>
@@ -104,7 +127,7 @@ const fetchWorkingHours = async () => {
         style={styles.calendar}
         markingType={'custom'}
         markedDates={markedDates}
-        onDayPress={onDayPress}
+        onDayPress={onDayPress}   
         dayComponent={({ date }) => {
           const markedDate = markedDates[date.dateString];
           return (
@@ -122,18 +145,15 @@ const fetchWorkingHours = async () => {
         }}
       />
 
-      <Modal
-        visible={isModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeModal}
-      >
+      <Modal visible={isModalVisible} animationType="slide" transparent={true} onRequestClose={closeModal}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalText}> Date:  <Text style={styles.modalDate}>   {selectedDate}  </Text>    </Text>
+            <Text style={styles.modalText}>
+              Date: <Text style={styles.modalDate}>{selectedDate}</Text>
+            </Text>
 
             {loading ? (
-              <ActivityIndicator size="large" color='#00503D' />
+              <ActivityIndicator size="large" color="#00503D" />
             ) : attendanceData && attendanceData.employee_Id ? (
               <View style={styles.dataContainer}>
                 <View style={styles.row}>
@@ -150,7 +170,9 @@ const fetchWorkingHours = async () => {
                     <Text
                       style={styles.linkText}
                       onPress={() =>
-                        Linking.openURL(`https://www.google.com/maps?q=${attendanceData.punch_in_time_latitude_coordinates},${attendanceData.punch_in_time_longitude_coordinates}`)
+                        Linking.openURL(
+                          `https://www.google.com/maps?q=${attendanceData.punch_in_time_latitude_coordinates},${attendanceData.punch_in_time_longitude_coordinates}`
+                        )
                       }
                     >
                       View Location
@@ -163,7 +185,9 @@ const fetchWorkingHours = async () => {
                     <Text
                       style={styles.linkText}
                       onPress={() =>
-                        Linking.openURL(`https://www.google.com/maps?q=${attendanceData.punch_out_time_latitude_coordinates},${attendanceData.punch_out_time_longitude_coordinates}`)
+                        Linking.openURL(
+                          `https://www.google.com/maps?q=${attendanceData.punch_out_time_latitude_coordinates},${attendanceData.punch_out_time_longitude_coordinates}`
+                        )
                       }
                     >
                       View Location
@@ -174,16 +198,10 @@ const fetchWorkingHours = async () => {
                   <Text style={styles.titleText}>Status:</Text>
                   <Text style={styles.dataText}>{attendanceData.status}</Text>
                 </View>
-                {/* <View style={styles.row}>
-                  <Text style={styles.titleText}>Working Hours:</Text>
-                  <Text style={styles.dataText}>{attendanceData.working_hours}</Text>
-                </View> */}
-
-                
                 <View style={styles.row}>
-  <Text style={styles.titleText}>Working Hours:</Text>
-  <Text style={styles.dataText}>{formatWorkingHours(attendanceData.working_hours)}</Text>
-</View>
+                  <Text style={styles.titleText}>Working Hours:</Text>
+                  <Text style={styles.dataText}>{formatWorkingHours(attendanceData.working_hours)}</Text>
+                </View>
               </View>
             ) : (
               <Text>No data available for this date</Text>
@@ -263,6 +281,7 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 400,
   },
+  
   modalText: {
     fontSize: 20,
     marginBottom: 20,
