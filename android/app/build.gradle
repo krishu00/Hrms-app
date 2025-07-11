@@ -26,29 +26,16 @@ android {
         }
     }
 
-    namespace "com.hrms.daksh"
+    namespace "com.newhrms"
     defaultConfig {
-        applicationId "com.hrms.daksh"
+        applicationId "com.newhrms"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
-
-           // Add the NDK ABI filters to exclude unnecessary architectures
-    ndk {
-        abiFilters "armeabi-v7a", "arm64-v8a" // Exclude x86 and x86_64 for size optimization
-    }
     }
     
-    signingConfigs { release {
-            if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
-                storeFile file(MYAPP_UPLOAD_STORE_FILE)
-                storePassword MYAPP_UPLOAD_STORE_PASSWORD
-                keyAlias MYAPP_UPLOAD_KEY_ALIAS
-                keyPassword MYAPP_UPLOAD_KEY_PASSWORD
-            }
-        }
-        
+    signingConfigs {
         debug {
             storeFile file('debug.keystore')
             storePassword 'android'
@@ -59,7 +46,7 @@ android {
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.release
+            signingConfig signingConfigs.debug
         }
         release {
             signingConfig signingConfigs.debug

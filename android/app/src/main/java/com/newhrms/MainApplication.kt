@@ -1,4 +1,4 @@
-package com.hrms.daksh
+package com.newhrms
 
 import android.app.Application
 import com.facebook.react.PackageList

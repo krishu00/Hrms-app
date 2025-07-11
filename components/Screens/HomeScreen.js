@@ -19,7 +19,7 @@ const HomeScreen = () => {
       setCurrentTime(formattedTime);
     }, 1000);
 
-    // Cleanup timer when component unmounts  
+    // Cleanup timer when component unmounts
     return () => clearInterval(timer);
   }, []);
 

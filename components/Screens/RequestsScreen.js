@@ -31,17 +31,17 @@ const RequestScreen = () => {
             <Tab.Screen name="Approvals" component={Approvals} />
             <Tab.Screen name="My Requests" component={MyRequests} />
             
-          </Tab.Navigator>   
+          </Tab.Navigator>
         </NavigationContainer>
 
         {/* Pass the handler to FilterOptions */}
-        {/* <FilterOptions onBottomSheetChange={handleBottomSheetChange} /> */}
+        <FilterOptions onBottomSheetChange={handleBottomSheetChange} />
       </View>
     </GestureHandlerRootView>
   );
 };
 
-const styles = StyleSheet.create({   
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff', // Ensure the main container has a white background

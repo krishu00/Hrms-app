@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,104 +6,105 @@ import {
   View,
   TextInput,
   Image,
-  SafeAreaView,
+  SafeAreaView
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import {MMKV} from 'react-native-mmkv';
-import {apiMiddleware} from '../../src/apiMiddleware/apiMiddleware';
+import { MMKV } from 'react-native-mmkv';
+import { apiMiddleware } from '../../src/apiMiddleware/apiMiddleware';
 import logoImage from '../../src/logos/m2r.png';
 
 const storage = new MMKV();
 
-const LoginScreen = ({onLoginSuccess}) => {
+const LoginScreen = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
-  const [forgotEmail, setForgotEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [controller, setController] = useState(null);
-  const [showPopup, setShowPopup] = useState(false);
-  const [popupMessage, setPopupMessage] = useState('');
+  const [controller, setController] = useState(null); // Store controller to abort if needed
 
   const handleLogin = async () => {
     setErrorMessage('');
+
+    // Step 1: Create an AbortController instance
     const abortController = new AbortController();
-    setController(abortController);
+    setController(abortController); // Save it in state to access it for cleanup
 
     try {
       const response = await apiMiddleware.post(
         '/login',
-        {email, password, platform: 'mobile'},
+        { email, password },
         {
-          headers: {'Content-Type': 'application/json'},
-          signal: abortController.signal,
-        },
+          headers: { 'Content-Type': 'application/json' },
+          signal: abortController.signal, // Step 2: Pass the abort signal    
+        }
       );
 
+      console.log('Login request:', { email, password });
+      console.log('API response:', response);
+
       if (response?.data?.success) {
-        const {employee} = response.data;
-        if (employee?.employee_id && employee?.company_code) {
+        const { employee } = response.data;
+
+        if (employee && employee.employee_id && employee.company_code) {
           storage.set('employee_id', employee.employee_id);
           storage.set('companyCode', employee.company_code);
           storage.set('userToken', employee.employee_id);
-          storage.set('platform', 'mobile');
+
+          console.log('Stored Employee ID:', employee.employee_id);
+          console.log('Stored Company Code:', employee.company_code);
+
           onLoginSuccess(employee.employee_id);
         } else {
           setErrorMessage('Employee data missing in response.');
         }
       } else {
-        setErrorMessage(response?.data?.message || 'Invalid credentials.');
+        setErrorMessage(response?.data?.message || 'Invalid credentials. Please try again.');
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        console.log('Login request aborted');
+      } else {
+        console.error('Login error:', error);
         setErrorMessage(
-          error.response?.data?.message ||
-            'An error occurred during login. Please try again.',
+          error.response?.data?.message || 'An error occurred during login. Please try again.'
         );
       }
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) return;
-    try {
-      const response = await apiMiddleware.post(
-        '/forgot_password',
-        {email},
-        {
-          headers: {'Content-Type': 'application/json'},
-        },
-      );
-
-      if (response?.data?.success) {
-        setPopupMessage('Password reset link sent to your email');
-      } else {
-        setPopupMessage(response?.data?.message || 'Failed to send email');
-      }
-    } catch (error) {
-      setPopupMessage(
-        error.response?.data?.message ||
-          'Something went wrong. Please try again.',
-      );
-    }
-
-    setShowPopup(true);
-    setTimeout(() => setShowPopup(false), 3000);
-  };
-
+  // Cleanup on unmount to abort ongoing requests
   useEffect(() => {
     return () => {
       if (controller) {
-        controller.abort();
+        controller.abort(); // Step 3: Abort if component unmounts
       }
     };
   }, [controller]);
+
+  const checkStoredData = () => {
+    try {
+      const employeeId = storage.getString('employee_id');
+      const companyCode = storage.getString('companyCode');
+
+      console.log('Retrieved Employee ID:', employeeId);
+      console.log('Retrieved Company Code:', companyCode);
+    } catch (error) {
+      console.error('Error retrieving data from MMKV:', error);
+    }
+  };
+
+  checkStoredData();
 
   return (
     <LinearGradient
       colors={['#F3F4F3', '#E5EEE6', '#DEECDD']}
       style={styles.container}>
       <SafeAreaView style={styles.content}>
-        <Image source={logoImage} style={styles.logo} />
+        <Image
+        //   source={require('../../src/logos/m2r.png')}
+        source={logoImage}
+          style={styles.logo}
+        />
+
         <View style={styles.titleContainer}>
           <Text style={styles.subTitleText}>Welcome To HRMS</Text>
         </View>
@@ -134,7 +135,7 @@ const LoginScreen = ({onLoginSuccess}) => {
         </View>
 
         <View style={styles.forgotPasswordContainer}>
-          <TouchableOpacity onPress={handleForgotPassword}>
+          <TouchableOpacity>
             <Text style={styles.forgotPasswordText}>Forgot Your Password?</Text>
           </TouchableOpacity>
         </View>
@@ -144,12 +145,6 @@ const LoginScreen = ({onLoginSuccess}) => {
         </TouchableOpacity>
 
         <Text style={styles.bottomText}>@powered by M2R Technomations</Text>
-
-        {showPopup && (
-          <View style={styles.popupBox}>
-            <Text style={styles.popupText}>{popupMessage}</Text>
-          </View>
-        )}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -218,20 +213,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 'auto',
     color: '#AFAFB0',
-  },
-  popupBox: {
-    position: 'absolute',
-    bottom: 100,
-    alignSelf: 'center',
-    backgroundColor: '#4BB543',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    zIndex: 999,
-  },
-  popupText: {
-    color: '#fff',
-    fontWeight: 'bold',
   },
 });
 
