@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import dayjs from 'dayjs';
 import Geolocation from 'react-native-geolocation-service';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {PermissionsAndroid, Platform} from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import {apiMiddleware} from '../../src/apiMiddleware/apiMiddleware';
 import {MMKV} from 'react-native-mmkv';
@@ -90,9 +89,31 @@ export default class ClockInOut extends React.Component {
     this.state.hourDegree.setValue((hours / 12) * 360 + (minutes / 60) * 30);
   };
 
-  requestLocationPermission = async () => true;
+  // requestLocationPermission = async () => true;
+  requestLocationPermission = async () => {
+    if (Platform.OS === 'ios') {
+      return true; // or handle iOS-specific permissions
+    }
 
-  getLocationAndPunchInOrOut = async action => {   
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location Permission Required',
+          message: 'This app needs access to your location to mark attendance.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
+
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  };
+  getLocationAndPunchInOrOut = async action => {
     if (await this.requestLocationPermission()) {
       Geolocation.getCurrentPosition(
         async position => {
@@ -101,7 +122,7 @@ export default class ClockInOut extends React.Component {
           action === 'punchIn'
             ? this.punchIn(latitude, longitude)
             : this.punchOut(latitude, longitude);
-        }, 
+        },
         error => {
           console.error('Error getting location:', error);
           Alert.alert('Error', 'Unable to get your location');
@@ -111,51 +132,11 @@ export default class ClockInOut extends React.Component {
     }
   };
 
-  // checkPunchStatus = async date => {
-  //   try {
-  //     // const response = await axios.get(
-  //     //   `${process.env.REACT_APP_API_URL}/attendance/daily_attendance?date=${date}`,
-  //     // );
-  //     const response = await apiMiddleware.post(
-  //       '/attendance/daily_attendance?date=${date}',
-
-  //     );
-  //     console.log('check status ' , response);
-
-  //     const {punch_in_time, punch_out_time} = response.data?.[0] || {};
-
-  //     if (punch_in_time) {
-  //       const punchInTime = dayjs(punch_in_time);
-
-  //       const now = dayjs();
-  //       const elapsedSeconds = now.diff(punchInTime, 'second');
-
-  //       this.setState({
-  //         punchInTime: punchInTime.format('hh:mm A'),
-  //         isPunchedIn: true,
-  //         elapsedSeconds,
-  //         buttonLabel: punch_out_time ? 'Done for the day' : 'Clock Out',
-  //         punchOutTime: punch_out_time
-  //           ? dayjs(punch_out_time).format('hh:mm A')
-  //           : null,
-  //         isDoneForDay: !!punch_out_time,
-  //       });
-  //     } else {
-  //       this.resetPunchState();
-  //     }
-  //   } catch (error) {
-  //     console.error('Error while checking punch-in status:', error);
-  //     this.resetPunchState();
-  //   }
-  // };
-
   checkPunchStatus = async date => {
     try {
       const response = await apiMiddleware.get(
         `/attendance/daily_attendance?date=${date}`,
       );
-
-      // console.log('check status ', response);
 
       const {punch_in_time, punch_out_time} = response.data?.[0] || {};
 
@@ -195,17 +176,19 @@ export default class ClockInOut extends React.Component {
 
   punchIn = async (latitude, longitude) => {
     try {
-      this.setState({loading: true});   
+      this.setState({loading: true});
 
       const employeeId = storage.getString('employee_id');
       const companyCode = storage.getString('companyCode');
+      const platform = storage.getString('platform');
 
       if (!employeeId || !companyCode) throw new Error('Missing credentials');
+      const dataPayload = platform === 'mobile' ? {latitude, longitude} : {};
 
       // Use `apiMiddleware.post` to make the API call
       const response = await apiMiddleware.post(
         '/attendance/punch_in',
-        {data: {latitude, longitude}},
+        {data: dataPayload},
         {
           headers: {
             'Content-Type': 'application/json',
@@ -213,7 +196,6 @@ export default class ClockInOut extends React.Component {
           },
         },
       );
-// console.log('punchin', response);
 
       if (response?.data?.success) {
         const punchInTime = dayjs(response.data.punchInTime || dayjs());
@@ -247,13 +229,17 @@ export default class ClockInOut extends React.Component {
 
       const employeeId = storage.getString('employee_id');
       const companyCode = storage.getString('companyCode');
+      const platform = storage.getString('platform');
 
       if (!employeeId || !companyCode) throw new Error('Missing credentials');
+
+      const dataPayload = platform === 'mobile' ? {latitude, longitude} : {};
 
       // Use `apiMiddleware.put` instead of `axios.put`
       const response = await apiMiddleware.put(
         '/attendance/punch_out',
-        {data: {latitude, longitude}},
+        {data: dataPayload},
+
         {
           headers: {
             'Content-Type': 'application/json',
@@ -261,7 +247,6 @@ export default class ClockInOut extends React.Component {
           },
         },
       );
-
       const punchOutTimeRaw = response.data.punch_out_time;
       const punchOutTime = dayjs(punchOutTimeRaw).isValid()
         ? dayjs(punchOutTimeRaw)
@@ -393,27 +378,6 @@ export default class ClockInOut extends React.Component {
                 </Text>
               </View>
 
-              {/* <TouchableOpacity
-                style={styles.punchButton}
-                onPress={() =>
-                  this.getLocationAndPunchInOrOut(
-                    isPunchedIn ? 'punchOut' : 'punchIn',
-                  )
-                }>
-                <Icon
-                  name={isPunchedIn ? 'sign-out' : 'sign-in'}
-                  size={20}
-                  color={isPunchedIn ? '#F7454A' : '#fff'}
-                  style={styles.iconStyle}
-                />
-                <Text
-                  style={[
-                    styles.buttonText,
-                    isPunchedIn ? styles.punchInText : styles.punchOutText,
-                  ]}>
-                  {isPunchedIn ? 'Punch Out' : 'Punch In'}
-                </Text>
-              </TouchableOpacity> */}
               <TouchableOpacity
                 style={styles.punchButton}
                 onPress={() => {
@@ -469,7 +433,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    height: 450,
+    height: 400,
   },
   clockContainer: {
     alignItems: 'center',
@@ -486,21 +450,21 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   hours: {
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: '#4a4a4a',
     height: '25%',
     marginTop: '25%',
     width: 5,
     borderRadius: 4,
   },
   minutes: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: '#1e90ff',
     height: '30%',
     marginTop: '20%',
     width: 3,
     borderRadius: 3,
   },
   seconds: {
-    backgroundColor: '#aeaeae',
+    backgroundColor: '#ff4757',
     height: '33%',
     width: 2,
     borderRadius: 2,
@@ -528,7 +492,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   infoContainer: {
-    paddingTop: 15,
+    paddingTop: 5,
     borderRadius: 10,
     alignItems: 'center',
     width: '100%',
@@ -570,7 +534,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   buttonText: {
-    color: '#fff',
+    color: 'black',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -578,9 +542,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   punchInText: {
-    color: '#F7454A',
+    color: 'black',
   },
   punchOutText: {
-    color: '#fff',
+    color: 'black',
   },
 });

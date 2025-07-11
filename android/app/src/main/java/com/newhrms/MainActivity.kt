@@ -1,4 +1,4 @@
-package com.newhrms
+package com.hrms.daksh
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

@@ -7,7 +7,7 @@ import {
   Image,
   TouchableWithoutFeedback,   
   Alert,
-} from 'react-native';
+} from 'react-native';    
 import LinearGradient from 'react-native-linear-gradient';
 import {MMKV} from 'react-native-mmkv';
 import {apiMiddleware} from '../../src/apiMiddleware/apiMiddleware';
@@ -20,7 +20,7 @@ const Header = ({onLogoutSuccess}) => {
   const [employeeId, setEmployeeId] = useState('');
 
   useEffect(() => {
-    const controller = new AbortController();
+    const controller = new AbortController();    
     UserDetails(controller);
 
     return () => {
@@ -57,9 +57,9 @@ const Header = ({onLogoutSuccess}) => {
       if (!storedEmployeeId || !storedCompanyCode) {
         Alert.alert('Error', 'Unable to retrieve stored data');
         return;
-      }
+      }   
 
-      const headers = {
+      const headers = {   
         Cookie: `employee_id=${storedEmployeeId}; companyCode=${storedCompanyCode}`,
       };
 

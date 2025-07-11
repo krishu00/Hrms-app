@@ -33,7 +33,7 @@ const DisplayTotalLeaves = () => {
               <Text style={styles.leaveValue}>360</Text>
             </View>
             <View style={styles.leaveBox}>
-              <Text style={styles.leaveTitle}>Annual Leave</Text>
+              <Text style={styles.leaveTitle}>Annual Leave</Text>    
               <Text style={styles.leaveValue}>4</Text>
             </View>
             <View style={styles.leaveBox}>

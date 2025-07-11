@@ -1,16 +1,19 @@
 import axios from 'axios';
-import { MMKV } from 'react-native-mmkv';
+import {MMKV} from 'react-native-mmkv';
+import { REACT_APP_API_URL } from '@env';
+
 
 export const apiMiddleware = axios.create({
-  baseURL: process.env.REACT_APP_API_URL,
+  // baseURL: "https://hrmsapi.mhsindia.com/login",
+  baseURL: REACT_APP_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+console.log('API Base URL------------------:', process.env.REACT_APP_API_URL);
 // console.log('API Base URL:', process.env.REACT_APP_API_URL);
 
-
-export const getHeaders = () => {   
+export const getHeaders = () => {
   const employeeId = MMKV.getString('employee_id');
   const companyCode = MMKV.getString('companyCode');
 
@@ -24,8 +27,8 @@ export const punchIn = async (latitude, longitude) => {
   try {
     const response = await apiMiddleware.post(
       '/attendance/punch_in',
-      { data: { latitude, longitude } },
-      { headers: getHeaders() }
+      {data: {latitude, longitude}},
+      {headers: getHeaders()},
     );
     return response.data;
   } catch (error) {
@@ -37,8 +40,8 @@ export const punchOut = async (latitude, longitude) => {
   try {
     const response = await apiMiddleware.put(
       '/attendance/punch_out',
-      { data: { latitude, longitude } },
-      { headers: getHeaders() }
+      {data: {latitude, longitude}},
+      {headers: getHeaders()},
     );
     return response.data;
   } catch (error) {
@@ -46,11 +49,11 @@ export const punchOut = async (latitude, longitude) => {
   }
 };
 
-export const checkPunchStatus = async (date) => {
+export const checkPunchStatus = async date => {
   try {
     const response = await apiMiddleware.get(
       `/attendance/daily_attendance?date=${date}`,
-      { headers: getHeaders() }
+      {headers: getHeaders()},
     );
     return response.data;
   } catch (error) {

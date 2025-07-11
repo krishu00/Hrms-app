@@ -16,7 +16,7 @@ const Dashboard = ({ onLogoutSuccess }) => {
     <View style={styles.container}>
       <Header onLogoutSuccess={onLogoutSuccess} />
       
-      <Tab.Navigator
+      <Tab.Navigator  
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused }) => {
